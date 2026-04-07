@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chef Dee's Kitchen</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #F4C4A2; max-width: 800px; margin: 0 auto; padding: 20px; }
+        #chat-box { background: white; padding: 20px; border-radius: 10px; height: 400px; overflow-y: auto; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .message { margin-bottom: 15px; padding: 10px 15px; border-radius: 15px; max-width: 80%; }
+        .user-msg { background-color: #F5F5F5; color: #212121; margin-left: auto; border: 1px solid #E0E0E0; }
+        .bot-msg { background-color: #FFF3E0; border-left: 5px solid #D32F2F; margin-right: auto; }
+        .input-group { display: flex; gap: 10px; }
+        input[type="text"] { flex-grow: 1; padding: 15px; border-radius: 10px; border: 1px solid #ccc; font-size: 16px; }
+        button { padding: 15px 25px; border-radius: 10px; border: none; background-color: #D32F2F; color: white; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:hover { background-color: #B71C1C; }
+    </style>
+</head>
+<body>
+    <h1>🔥 Chef Dee's Kitchen</h1>
+    <p>Don't be a donkey. Tell me what you're craving.</p>
+    
+    <div id="chat-box">
+        <div class="message bot-msg"><strong>👨‍🍳 Chef Dee:</strong> I'm Chef Dee 🔥 Let's find you something incredible. What are you craving?</div>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="user-input" placeholder="Type your craving here..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    <br>
+    <button onclick="clearChat()" style="background-color: #555; padding: 10px; font-size: 14px;">Clear Chat History</button>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+
+        function appendMessage(sender, text, isUser) {
+            const div = document.createElement('div');
+            div.className = 'message ' + (isUser ? 'user-msg' : 'bot-msg');
+            div.innerHTML = `<strong>${sender}:</strong> ${text}`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            appendMessage('👤 You', text, true);
+            userInput.value = '';
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, persona: 'chef_messages' })
+                });
+                
+                const data = await response.json();
+                if (data.reply) {
+                    appendMessage('👨‍🍳 Chef Dee', data.reply, false);
+                } else {
+                    appendMessage('⚠️ System', 'Error connecting to the kitchen.', false);
+                }
+            } catch (err) {
+                appendMessage('⚠️ System', 'Network error.', false);
+            }
+        }
+
+        async function clearChat() {
+            await fetch('/api/clear', { method: 'POST' });
+            chatBox.innerHTML = '<div class="message bot-msg"><strong>👨‍🍳 Chef Dee:</strong> Chat cleared. Let us start fresh.</div>';
+        }
+    </script>
+</body>
+</html>
