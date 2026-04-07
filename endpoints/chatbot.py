@@ -1,8 +1,9 @@
 from openai import OpenAI
 import requests
+import os
 
 client = OpenAI(
-        api_key="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"
+        api_key=os.environ.get("OPENAI_API_KEY")
     )
 # 1. Define the Tool Menu for GPT
 custom_tools = [
@@ -48,7 +49,7 @@ def voice_chat_with_gpt(audio_value):
 
 def get_google_place_photo(restaurant_query, city="Baltimore"):
 
-    api_key = "AIzaSyC-RDrpaoAevYI0Ra1CPaRmsSMfoqBJ1Fo"
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
     print("API KEY FOUND:", api_key is not None)
 
     if not api_key:
