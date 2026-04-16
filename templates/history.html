@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat History | AI Restaurant Guide</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f8f9fa; margin: 0; display: flex; height: 100vh; }
+        
+        /* Sidebar Styles (Identical to chat.html) */
+        .sidebar { width: 250px; background-color: #212529; color: white; padding: 20px; display: flex; flex-direction: column; }
+        .sidebar h2 { font-size: 18px; margin-bottom: 20px; color: #adb5bd; }
+        .nav-link { display: block; padding: 12px; margin-bottom: 10px; color: white; text-decoration: none; border-radius: 8px; transition: background 0.2s; }
+        .nav-link:hover { background-color: #343a40; }
+        .nav-link.active { background-color: #495057; font-weight: bold; border-left: 4px solid #0d6efd; }
+        
+        /* Main Content Styles */
+        .main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 30px; max-width: 1000px; margin: 0 auto; overflow-y: auto;}
+        .header { margin-bottom: 30px; }
+        .header h1 { margin: 0; color: #212529; }
+        
+        /* Table Styles */
+        .table-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #dee2e6; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { background-color: #f1f3f5; padding: 12px; border-bottom: 2px solid #dee2e6; color: #495057; }
+        td { padding: 12px; border-bottom: 1px solid #dee2e6; color: #212529; vertical-align: middle; }
+        tr:hover { background-color: #f8f9fa; }
+        
+        /* Buttons/Links */
+        .view-btn { display: inline-block; padding: 8px 12px; background-color: #0d6efd; color: white; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: bold; }
+        .view-btn:hover { background-color: #0b5ed7; }
+        .empty-state { text-align: center; padding: 40px; color: #6c757d; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>Dashboard</h2>
+        {% for key, p in personas.items() %}
+            <a href="/chat/{{ key }}" class="nav-link">
+                {{ p.avatar }} {{ p.name }}
+            </a>
+        {% endfor %}
+        <hr style="border-color: #495057; width: 100%; margin: 15px 0;">
+        <a href="/history" class="nav-link active">
+            🗄️ History Logs
+        </a>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h1>🗄️ Chat History Logs</h1>
+            <p style="color: #6c757d;">All auto-saved conversations stored in Vercel Blob.</p>
+        </div>
+        
+        <div class="table-container">
+            {% if chats %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File Name</th>
+                            <th>Size (Bytes)</th>
+                            <th>Uploaded At</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for file in chats %}
+                        <tr>
+                            <td><strong>{{ file.pathname }}</strong></td>
+                            <td>{{ file.size }}</td>
+                            <td>{{ file.uploadedAt or file.uploaded_at or 'Unknown' }}</td>
+                            <td>
+                                <a href="{{ file.url }}" target="_blank" class="view-btn">View JSON</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="empty-state">
+                    <h3>No chat history found!</h3>
+                    <p>Go talk to Chef Dee or Rev to generate some logs.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+</body>
+</html>

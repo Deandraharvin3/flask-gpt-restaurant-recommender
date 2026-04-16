@@ -1,11 +1,14 @@
 from openai import OpenAI
 import requests
+import json
 import os
 
 client = OpenAI(
         api_key=os.environ.get("OPENAI_API_KEY")
     )
 # 1. Define the Tool Menu for GPT
+import json
+
 custom_tools = [
     {
         "type": "function",
@@ -15,30 +18,90 @@ custom_tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "origin": {
-                        "type": "string",
-                        "description": "The user's starting city or location."
-                    },
-                    "destination": {
-                        "type": "string",
-                        "description": "The exact name and city of the restaurant."
-                    }
+                    "origin": {"type": "string", "description": "The user's starting city or location."},
+                    "destination": {"type": "string", "description": "The exact name and city of the restaurant."}
                 },
                 "required": ["origin", "destination"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_google_place_photo",
+            "description": "Fetches a real photo URL and address for a specific restaurant using Google Places.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "restaurant_query": {"type": "string", "description": "The name of the restaurant."},
+                    "city": {"type": "string", "description": "The city the restaurant is in (default is Baltimore)."}
+                },
+                "required": ["restaurant_query"]
             }
         }
     }
 ]
 
 def chat_with_gpt(messages):
-    response = client.responses.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
-        tools=[{
-            "type": "web_search",
-        }],
-        input=messages,
+        messages=messages,
+        tools=custom_tools,
+        tool_choice="auto"
     )
-    return response.output_text
+    
+    response_message = response.choices[0].message
+
+    # 2. Did GPT decide to use a tool?
+    if response_message.tool_calls:
+        
+        # THE FIX: Convert the complex OpenAI object into a standard Python dictionary
+        assistant_msg = {
+            "role": "assistant",
+            "content": response_message.content,
+            "tool_calls": [
+                {
+                    "id": tool.id,
+                    "type": tool.type,
+                    "function": {
+                        "name": tool.function.name,
+                        "arguments": tool.function.arguments
+                    }
+                } for tool in response_message.tool_calls
+            ]
+        }
+        
+        # Append the safe dictionary to the history
+        messages.append(assistant_msg)
+        
+        # Loop through the tools it wants to use
+        for tool_call in response_message.tool_calls:
+            if tool_call.function.name == "get_google_place_photo":
+                args = json.loads(tool_call.function.arguments)
+                
+                # Run your Google Python function
+                result = get_google_place_photo(
+                    restaurant_query=args.get("restaurant_query"), 
+                    city=args.get("city", "Baltimore")
+                )
+                
+                # Feed the JSON result back into the chat history
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": "get_google_place_photo",
+                    "content": json.dumps(result)
+                })
+        
+        # 3. Send the updated history back to GPT so it can format the final HTML response
+        final_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages
+        )
+        return final_response.choices[0].message.content
+
+    # If it didn't use a tool, just return the standard text response
+    return response_message.content
 
 def voice_chat_with_gpt(audio_value):
     response = client.audio.transcriptions.create(

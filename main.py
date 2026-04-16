@@ -1,6 +1,7 @@
 from flask import Flask, render_template, redirect, url_for
 import os
 from endpoints.routes import api_bp, PERSONAS # Import PERSONAS from routes
+import vercel_blob
 
 app = Flask(__name__)
 app.register_blueprint(api_bp)
@@ -27,6 +28,18 @@ def chat_page(persona_id):
         current_id=persona_id,
         bot=current_bot
     )
+
+@app.route('/history')
+def chat_history():
+    # Fetch the list of blobs
+    resp = vercel_blob.list()
+    
+    # Depending on the SDK version, the list of files might be inside a 'blobs' key
+    # or returned directly as a list. We handle both here just in case.
+    blob_list = resp.get('blobs', resp) if isinstance(resp, dict) else resp
+    
+    # Pass BOTH the chat files and the PERSONAS dictionary so the sidebar works
+    return render_template('history.html', chats=blob_list, personas=PERSONAS, current_id='history')
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5001)

@@ -1,5 +1,8 @@
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, json, jsonify, request, session
 from .chatbot import chat_with_gpt, get_google_place_photo
+import vercel_blob
+from datetime import datetime
+import uuid
 
 api_bp = Blueprint("api", __name__)
 
@@ -34,6 +37,9 @@ PERSONAS = {
             "3. REFUSAL BEHAVIOR: Refuse in character. (e.g., 'I don't do weather forecasts, fam. I'm here to spill the tea on restaurants, not the climate.') "
             "4. Always include a hypothetical Vibe Score out of 10 for restaurants. Say things like 'This place is a 9/10 for vibes but only a 6/10 for food' or 'The aesthetics are fire, but the reviews say it's a 4/10 overall.' Be specific about what makes the vibe good or bad. "
             "5. After your review, ask the user if they want to see a 'real image' of the restaurant. Make sure you only ask if they give you a restaurant name to review, and not for any other type of input. If they say yes, you will show them a real photo of the restaurant from Google Places. If they say no, you will say 'Bet, no pressure. Drop another restaurant and I'll keep it 100 with you.'"
+            "6. If the user agrees to see a photo, trigger the 'get_google_place_photo' tool. "
+            "When the tool returns the data, YOU MUST output the image using this exact HTML format: "
+            "<br><img src='[INSERT_PHOTO_URL_HERE]' style='max-width: 100%; border-radius: 10px; margin-top: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>"
     },
     "macro": {
         "name": "The Macro Hacker",
@@ -88,37 +94,73 @@ PERSONAS = {
 def chatbot():
     data = request.json
     user_message = data.get("message")
-    # Default to 'chef' if something goes wrong
     persona_id = data.get("persona", "chef") 
 
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
 
-    # Grab the specific bot's configuration
     bot_config = PERSONAS.get(persona_id, PERSONAS["chef"])
     session_key = bot_config["session_key"]
 
-    # Initialize the chat history dynamically
     if session_key not in session:
         session[session_key] = [
             {"role": "system", "content": bot_config["system_prompt"]}
         ]
+        session[f"{session_key}_file_id"] = str(uuid.uuid4())[:8]
 
-    # Append user message
     session[session_key].append({"role": "user", "content": user_message})
 
     try:
         bot_response = chat_with_gpt(session[session_key])
-        
-        # Append assistant response
         session[session_key].append({"role": "assistant", "content": bot_response})
         session.modified = True 
+
+        try:
+            chat_id = session.get(f"{session_key}_file_id", "fallback_id")
+            filename = f"{persona_id}_chat_{chat_id}.json"
+            json_content = json.dumps(session[session_key], indent=4)
+            
+            vercel_blob.put(filename, json_content.encode('utf-8'), options={'access': 'public'})
+            print(f"Auto-saved to Blob: {filename}")
+        except Exception as blob_err:
+            print(f"Background auto-save failed: {blob_err}")
 
         return jsonify({"reply": bot_response})
     
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"error": "Failed to communicate with AI."}), 500
+
+@api_bp.post('/api/history')
+def save_history():
+    data = request.json
+    persona_id = data.get("persona", "chef")
+    
+    bot_config = PERSONAS.get(persona_id, PERSONAS["chef"])
+    session_key = bot_config["session_key"]
+    
+    # 1. Grab the current chat history from the session
+    chat_data = session.get(session_key)
+
+    if not chat_data or len(chat_data) <= 1:
+        return jsonify({"error": "No meaningful chat history to save."}), 400
+
+    # 2. Create a unique filename using the bot's name and a timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{persona_id}_history_{timestamp}.json"
+
+    # 3. Convert the Python list into a formatted JSON string
+    json_content = json.dumps(chat_data, indent=4)
+
+    # 4. Upload to Vercel Blob
+    try:
+        # We encode it to bytes, and make sure it's publicly accessible to download later
+        resp = vercel_blob.put(filename, json_content.encode('utf-8'), options={'access': 'public'})
+        print("Blob Response:", resp)
+        return jsonify({"status": "success", "url": resp.get('url')})
+    except Exception as e:
+        print(f"Blob Error: {e}")
+        return jsonify({"error": "Failed to save to Vercel Blob."}), 500
 
 @api_bp.post('/api/clear')
 def clear_chat():
@@ -130,5 +172,9 @@ def clear_chat():
     
     if session_key in session:
         session.pop(session_key)
+    
+    file_id_key = f"{session_key}_file_id"
+    if file_id_key in session:
+        session.pop(file_id_key)
         
     return jsonify({"status": "cleared"})

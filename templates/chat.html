@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <title>{{ bot.name }} | AI Restaurant Guide</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: #f8f9fa; margin: 0; display: flex; height: 100vh; }
@@ -19,6 +20,12 @@
         .header { margin-bottom: 20px; }
         .header h1 { margin: 0; color: #212529; }
         
+        #chat-box img { 
+            max-width: 100%; 
+            border-radius: 10px; 
+            margin-top: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        }
         #chat-box { flex-grow: 1; background: white; padding: 20px; border-radius: 10px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #dee2e6; }
         .message { margin-bottom: 15px; padding: 12px 18px; border-radius: 15px; max-width: 80%; line-height: 1.5; }
         .user-msg { background-color: #0d6efd; color: white; margin-left: auto; border-bottom-right-radius: 2px; }
@@ -41,6 +48,9 @@
                 {{ p.avatar }} {{ p.name }}
             </a>
         {% endfor %}
+        <a href="/history" class="nav-link {% if key == current_id %}active{% endif %}">
+            History
+        </a>
     </div>
 
     <div class="main-content">
@@ -50,6 +60,17 @@
         
         <div id="chat-box">
             <div class="message bot-msg"><strong>{{ bot.name }}:</strong> {{ bot.greeting }}</div>
+            
+            {% for msg in chat_history %}
+                {% if msg.role == 'user' %}
+                    <div class="message user-msg"><strong>You:</strong> <div style="margin-top: 5px;">{{ msg.content }}</div></div>
+                {% elif msg.role == 'assistant' %}
+                    <div class="message bot-msg">
+                        <strong>{{ bot.name }}:</strong> 
+                        <div class="markdown-content" style="margin-top: 5px; display:none;">{{ msg.content }}</div>
+                    </div>
+                {% endif %}
+            {% endfor %}
         </div>
 
         <div class="input-group">
@@ -57,6 +78,7 @@
             <button class="send-btn" onclick="sendMessage()">Send</button>
         </div>
         <button class="clear-btn" onclick="clearChat()">Clear Chat History</button>
+        <button class="clear-btn" style="color: #198754;" onclick="saveChat()">💾 Save Chat to Cloud</button>
     </div>
 
     <script>
@@ -68,8 +90,9 @@
 
         function appendMessage(sender, text, isUser) {
             const div = document.createElement('div');
-            div.className = 'message ' + (isUser ? 'user-msg' : 'bot-msg');
-            div.innerHTML = `<strong>${sender}:</strong> ${text}`;
+            div.className = 'message ' + (isUser ? 'user-msg' : 'bot-msg');            
+            const formattedText = isUser ? text : marked.parse(text);
+            div.innerHTML = `<strong>${sender}:</strong> <div style="margin-top: 5px;">${formattedText}</div>`;
             chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
@@ -101,6 +124,29 @@
                 }
             } catch (err) {
                 appendMessage('System', 'Network error.', false);
+            }
+        }
+
+        async function saveChat() {
+            try {
+                // Let the user know it's saving
+                appendMessage('System', 'Saving chat history to cloud...', false);
+                
+                const response = await fetch('/api/history', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ persona: currentPersonaId }) 
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === "success") {
+                    appendMessage('System', `✅ Chat saved successfully!`, false);
+                } else {
+                    appendMessage('System', `⚠️ Could not save: ${data.error}`, false);
+                }
+            } catch (err) {
+                appendMessage('System', '⚠️ Network error while saving.', false);
             }
         }
 
