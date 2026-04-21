@@ -1,8 +1,10 @@
 from flask import Blueprint, json, jsonify, request, session
-from .chatbot import chat_with_gpt, get_google_place_photo
+from .chatbot import chat_with_gpt, get_google_place_photo, voice_chat_with_gpt
 import vercel_blob
 from datetime import datetime
 import uuid
+import os
+import tempfile
 
 api_bp = Blueprint("api", __name__)
 
@@ -108,10 +110,18 @@ def chatbot():
             {"role": "system", "content": bot_config["system_prompt"]}
         ]
         session[f"{session_key}_file_id"] = str(uuid.uuid4())[:8]
+    if user_image:
+        session[session_key].append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": user_message},
+                {"type": "image_url", "image_url": {"url": user_image}}
+            ]
+        })
+    else:
+        # Otherwise, just send the standard text message
+        session[session_key].append({"role": "user", "content": user_message})
 
-    session[session_key].append({"role": "user", "content": user_message})
-
-    if user_image: session[session_key].append({"role": "user", "content": user_image})
     try:
         print("Trying the bot response with:", user_image, session[session_key])
         bot_response = chat_with_gpt(session[session_key], user_message, user_image)
@@ -181,3 +191,33 @@ def clear_chat():
         session.pop(file_id_key)
         
     return jsonify({"status": "cleared"})
+
+@api_bp.post("/api/transcribe")
+def transcribe_audio():
+    if 'audio' not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+
+    audio_file = request.files['audio']
+
+    # Safely save the file to a temporary Vercel directory
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
+        audio_file.save(temp_audio.name)
+        temp_audio_path = temp_audio.name
+
+    try:
+        # Open the temporary file and pass it to your Whisper function
+        with open(temp_audio_path, "rb") as f:
+            transcription = voice_chat_with_gpt(f)
+            print("Transcription received: ", transcription)
+
+        # Clean up the temporary file so we don't leak memory
+        os.remove(temp_audio_path)
+
+        return jsonify({"text": transcription})
+        
+    except Exception as e:
+        print(f"Transcription error: {e}")
+        # Clean up even if it fails
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
+        return jsonify({"error": "Transcription failed"}), 500

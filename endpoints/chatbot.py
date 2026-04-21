@@ -45,21 +45,11 @@ custom_tools = [
 def chat_with_gpt(messages, message=None, image=None):
     if image:
         print("Got image:", image)
-        response = client.responses.create(
-            model="gpt-4.1-mini",
-            input=[{
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": message},
-                    {
-                        "type": "input_image",
-                        "image_url": image,
-                    },
-                ],
-            }],
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages 
         )
-        
-        return response.output_text
+        return response.choices[0].message.content
 
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -126,7 +116,7 @@ def voice_chat_with_gpt(audio_value):
         model="whisper-1",
         file = audio_value
     )
-    return response
+    return response.text
 
 def get_google_place_photo(restaurant_query, city="Baltimore"):
 

@@ -76,6 +76,7 @@
         <div class="input-group">
             <input type="file" name="image" id="user-image" accept="image/*">
             <input type="text" id="user-input" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+            <button id="record-btn" onclick="toggleRecording()" style="background-color: #6c757d; border-radius: 8px; padding: 10px 15px; font-size: 20px;">Speak</button>
             <button class="send-btn" onclick="sendMessage()">Send</button>
         </div>
         <button class="clear-btn" onclick="clearChat()">Clear Chat History</button>
@@ -90,6 +91,72 @@
         const currentPersonaId = "{{ current_id }}";
         const botName = "{{ bot.name }}";
 
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        const recordBtn = document.getElementById('record-btn');
+
+        async function toggleRecording() {
+            if (isRecording) {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.style.backgroundColor = '#6c757d'; // Back to gray
+                recordBtn.innerText = 'Speak';
+            } else {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        audioChunks = []; // Reset chunks for next time
+
+                        // Let the user know we are working on it
+                        userInput.value = "Transcribing...";
+                        userInput.disabled = true;
+
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'recording.webm');
+
+                        try {
+                            const response = await fetch('/api/transcribe', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            const data = await response.json();
+                            
+                            if (data.text) {
+                                // Put the transcribed text into the input box
+                                userInput.value = data.text;
+                                userInput.disabled = false;
+                                // Optional: You could call sendMessage() here to auto-send it
+                            } else {
+                                userInput.value = "";
+                                userInput.disabled = false;
+                                appendMessage('System', '⚠️ Transcription failed.', false);
+                            }
+                        } catch (err) {
+                            userInput.value = "";
+                            userInput.disabled = false;
+                            appendMessage('System', '⚠️ Network error during transcription.', false);
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordBtn.style.backgroundColor = '#dc3545'; // Turn red to show recording
+                    recordBtn.innerText = 'STOP'; 
+                } catch (err) {
+                    alert('Microphone access denied. Please allow microphone permissions in your browser.');
+                }
+            }
+        }
         function appendMessage(sender, text, isUser) {
             const div = document.createElement('div');
             div.className = 'message ' + (isUser ? 'user-msg' : 'bot-msg');            
