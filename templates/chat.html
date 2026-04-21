@@ -74,6 +74,7 @@
         </div>
 
         <div class="input-group">
+            <input type="file" name="image" id="user-image" accept="image/*">
             <input type="text" id="user-input" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
             <button class="send-btn" onclick="sendMessage()">Send</button>
         </div>
@@ -84,6 +85,7 @@
     <script>
         const chatBox = document.getElementById('chat-box');
         const userInput = document.getElementById('user-input');
+        const userImage = document.getElementById('user-image');
         // We inject the current bot's ID from Flask into JS
         const currentPersonaId = "{{ current_id }}";
         const botName = "{{ bot.name }}";
@@ -92,7 +94,11 @@
             const div = document.createElement('div');
             div.className = 'message ' + (isUser ? 'user-msg' : 'bot-msg');            
             const formattedText = isUser ? text : marked.parse(text);
-            div.innerHTML = `<strong>${sender}:</strong> <div style="margin-top: 5px;">${formattedText}</div>`;
+            if(formattedText.startsWith("blob:")){
+                div.innerHTML = `<strong>${sender}:</strong> <img style="margin-top: 5px;" src="${formattedText}" />`;
+            } else {
+                div.innerHTML = `<strong>${sender}:</strong> <div style="margin-top: 5px;">${formattedText}</div>`;
+            }
             chatBox.appendChild(div);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
@@ -101,19 +107,34 @@
             if (e.key === 'Enter') sendMessage();
         }
 
+        function getBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file); // This actually starts the reading process
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
         async function sendMessage() {
             const text = userInput.value.trim();
             if (!text) return;
 
             appendMessage('You', text, true);
             userInput.value = '';
-
             try {
+                const file = userImage.files[0]
+                let base64Image = '';
+                if(file) {
+                    base64Image = await getBase64(file);
+                    appendMessage('You', URL.createObjectURL(file), true)
+                    userImage.value = ''
+                }
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     // Send the specific persona ID to the backend
-                    body: JSON.stringify({ message: text, persona: currentPersonaId })
+                    body: JSON.stringify({ message: text, persona: currentPersonaId, image: base64Image })
                 });
                 
                 const data = await response.json();
@@ -123,6 +144,7 @@
                     appendMessage('System', 'Error connecting to the AI.', false);
                 }
             } catch (err) {
+                console.log("Error:", err)
                 appendMessage('System', 'Network error.', false);
             }
         }

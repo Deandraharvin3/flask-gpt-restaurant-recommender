@@ -42,7 +42,25 @@ custom_tools = [
     }
 ]
 
-def chat_with_gpt(messages):
+def chat_with_gpt(messages, message=None, image=None):
+    if image:
+        print("Got image:", image)
+        response = client.responses.create(
+            model="gpt-4.1-mini",
+            input=[{
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": message},
+                    {
+                        "type": "input_image",
+                        "image_url": image,
+                    },
+                ],
+            }],
+        )
+        
+        return response.output_text
+
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,

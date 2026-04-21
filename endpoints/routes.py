@@ -95,6 +95,7 @@ def chatbot():
     data = request.json
     user_message = data.get("message")
     persona_id = data.get("persona", "chef") 
+    user_image = data.get("image")
 
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
@@ -110,8 +111,10 @@ def chatbot():
 
     session[session_key].append({"role": "user", "content": user_message})
 
+    if user_image: session[session_key].append({"role": "user", "content": user_image})
     try:
-        bot_response = chat_with_gpt(session[session_key])
+        print("Trying the bot response with:", user_image, session[session_key])
+        bot_response = chat_with_gpt(session[session_key], user_message, user_image)
         session[session_key].append({"role": "assistant", "content": bot_response})
         session.modified = True 
 
